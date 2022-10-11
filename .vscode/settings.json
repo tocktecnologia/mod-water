@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.excalidraw": "json",
+        "*.excalidrawlib": "json",
+        "optional": "cpp",
+        "system_error": "cpp",
+        "*.ipp": "cpp",
+        "*.tcc": "cpp"
+    }
+}
