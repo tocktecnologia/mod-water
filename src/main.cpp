@@ -12,6 +12,7 @@
 #include "TockWiFiManager.h"
 #include "awsMQTT.h"
 
+
 void setup(){
   Serial.begin(9600);
   Serial.println("Setup Started!");
@@ -28,6 +29,7 @@ void loop(){
 
   loopWM();
   loopMQTT();
+
 
 }
 

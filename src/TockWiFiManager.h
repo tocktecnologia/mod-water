@@ -17,11 +17,13 @@
 //WiFiManager
 WiFiManager wifiManager;
 std::vector<WiFiManagerParameter*> wifiParams;
-WiFiManagerParameter ota_enabled ("ota", "ota", "0", 2, "<br> OTA Enabled <hr>",0);
-WiFiManagerParameter aws_file ("aws_file", "aws_file", "/mod-water-awsmqtt-v1.0.bin", 20, "<br> AWS File Update<hr>",0);
+WiFiManagerParameter ota_enabledParam ("ota", "ota", "0", 2, "<br> OTA Enabled <hr>",0);
+WiFiManagerParameter aws_fileParam ("aws_file", "aws_file", "/mod-water-awsmqtt-v1.0.bin", 20, "<br> AWS File Update<hr>",0);
+WiFiManagerParameter highParam ("high", "Altura (cm)", "20", 4, "<br> Altura (cm) <hr>",0);
+WiFiManagerParameter offsetParam("offset", "Recuo (cm)", "130", 4, "<br> Recuo (cm) <hr>",0);
+
 
 String awsFileMQtt;
-
 void checkConfigButton();
 void saveConfigCallback();
 void firmwareUpdate(String awsFile);
@@ -38,12 +40,10 @@ void setupWM() {
   // initializing Parameters
   //const char* custom_radio_str = "<br/><label for='customfieldid'>Input/Output</label> <br> <input type='radio' name='customfieldid' value='1' checked> Input <br> <input type='radio' name='customfieldid' value='2'> Output <br>";
   // wifiParams.push_back(new WiFiManagerParameter(custom_radio_str);
-  wifiParams.push_back(&ota_enabled); // nao colocar 1 emlength
-  wifiParams.push_back(&aws_file); // nao colocar 1 emlength
-  wifiParams.push_back(new WiFiManagerParameter("high", "Altura (cm)", "20", 4, "<br> Altura (cm) <hr>",0));
-  wifiParams.push_back(new WiFiManagerParameter("offset", "Recuo (cm)", "130", 4, "<br> Recuo (cm) <hr>",0));
-  wifiParams.push_back(new WiFiManagerParameter("trigger", "Trigger", "4", 2, "<br> Trigger <hr>",0));
-  wifiParams.push_back(new WiFiManagerParameter("echo", "Echo", "5", 2, "<br> Echo <hr>",0));
+  wifiParams.push_back(&ota_enabledParam); // nao colocar 1 emlength
+  wifiParams.push_back(&aws_fileParam); // nao colocar 1 emlength
+  wifiParams.push_back(&highParam);
+  wifiParams.push_back(&offsetParam);
   
   
 
@@ -216,5 +216,7 @@ void firmwareUpdate(String awsFile){
     }
     
 }
+
+
 
 #endif

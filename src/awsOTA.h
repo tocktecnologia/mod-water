@@ -9,10 +9,6 @@ WiFiClient clientNoSecure;
 long contentLength = 0;
 bool isValidContentType = false;
 
-// Your SSID and PSWD that the chip needs
-// to connect to
-const char* SSID = "CH RUFINOS 2.4G";
-const char* PSWD = "vitoria123";
 
 // S3 Bucket Config
 String host = "tock-firmware.s3.us-east-1.amazonaws.com"; // Host => bucket-name.s3.region.amazonaws.com

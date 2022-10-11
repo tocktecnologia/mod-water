@@ -16,6 +16,8 @@
 //Enter values in secrets.h ▼
 #include "secrets.h"
 #include <Update.h>
+#include <HCSR04.h>
+
 
 #if !(ARDUINOJSON_VERSION_MAJOR == 6 and ARDUINOJSON_VERSION_MINOR >= 7)
 #error "Install ArduinoJson v6.7.0-beta or higher"
@@ -49,6 +51,8 @@ long lastReconnectAttempt = 0;
 int intervalRetryMqtt = 4000;
 int countWiFiDisconnection = 0;
 
+Ticker timerSendMqtt;
+HCSR04 *hc; 
 
 void writeAwsFile(String awsFile)
 {   
@@ -145,21 +149,21 @@ void pubSubErr(int8_t MQTTErr)
     Serial.print("Connect unauthorized");
 }
 
+void sendDistSensor(){
+  auto message = "{\"module\":\"water\",\"dis\":" + String(hc->dist()) + "}";
+  Serial.println("sending mqtt messag: " + String(message));
+  mqttClient.publish(MQTT_TOPIC_PUB.c_str(), message.c_str());
+}
+
 boolean reconnectMqtt()
 {
-    // Serial.println("Wifi Status: "+ wifiManager.getWLStatusString());
-
-    if (WiFi.status() == WL_CONNECTED)
+    if (WiFi.status() != WL_CONNECTED)
     {
-        // flipper.attach(0.2, flip); // connected to wifi
+      countWiFiDisconnection++;
+      if (countWiFiDisconnection >= 3)
+        ESP.restart();
     }
-    else
-    {
-        // flipper.attach(0.05, flip); // NOT connected to wifi
-        countWiFiDisconnection++;
-        if (countWiFiDisconnection >= 3)
-            ESP.restart();
-    }
+  
 
     String thingName = esp8266ID();
     String clientId = "TOCK-" + thingName + "-";
@@ -177,13 +181,12 @@ boolean reconnectMqtt()
         mqttClient.publish(MQTT_TOPIC_PUB.c_str(), "{\"msg\":\"connected\"}");
         mqttClient.subscribe(MQTT_TOPIC_UPDATE.c_str());
         mqttClient.subscribe(MQTT_TOPIC_SUB.c_str());      
-        flipper.attach(1, flip);
+   
+        flipper.attach(1, flip);     
     }
 
     return mqttClient.connected();
 }
-
-
 
 void setupMQTT(){
 
@@ -207,6 +210,12 @@ NTPConnect();
   MQTT_TOPIC_SUB = "tock/" + esp8266ID() + "/sub";
   MQTT_TOPIC_PUB = "tock/" + esp8266ID() + "/pub";
 
+
+  
+  hc = new HCSR04(2,22);
+  timerSendMqtt.attach(4,sendDistSensor);
+  
+
 }
 
 void loopMQTT()
@@ -229,5 +238,8 @@ void loopMQTT()
     { 
         mqttClient.loop();
     }
+
+
+
 }
 
