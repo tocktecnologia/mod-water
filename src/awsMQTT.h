@@ -53,6 +53,9 @@ int countWiFiDisconnection = 0;
 
 Ticker timerSendMqtt;
 HCSR04 *hc; 
+int triggerPin = 2;
+int echoPin = 22;
+int intervalSample = 1;
 int maxSamples=100;
 int countTimesSensor=0;
 float countValuesSensor=0.0;
@@ -167,7 +170,7 @@ void sendDistSensor(){
   }
   else {
     auto distCurrent = hc->dist() - String(offsetParam.getValue()).toFloat();
-    auto distCurrentAverage = countValuesSensor/countTimesSensor;
+    auto distCurrentAverage = countValuesSensor/(countTimesSensor==0?1:countTimesSensor);
     
     // filtering by average distance
     if(distCurrent < filteringFactor * distCurrentAverage){
@@ -236,8 +239,8 @@ NTPConnect();
 
 
   
-  hc = new HCSR04(2,22);
-  timerSendMqtt.attach(4,sendDistSensor);
+  hc = new HCSR04(triggerPin,echoPin);
+  timerSendMqtt.attach(intervalSample,sendDistSensor);
   
 
 }
