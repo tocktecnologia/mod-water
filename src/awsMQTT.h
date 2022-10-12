@@ -53,6 +53,10 @@ int countWiFiDisconnection = 0;
 
 Ticker timerSendMqtt;
 HCSR04 *hc; 
+int maxSamples=100;
+int countTimesSensor=0;
+float countValuesSensor=0.0;
+float filteringFactor = 2;
 
 void writeAwsFile(String awsFile)
 {   
@@ -150,9 +154,29 @@ void pubSubErr(int8_t MQTTErr)
 }
 
 void sendDistSensor(){
-  auto message = "{\"module\":\"water\",\"dis\":" + String(hc->dist()) + "}";
-  Serial.println("sending mqtt messag: " + String(message));
-  mqttClient.publish(MQTT_TOPIC_PUB.c_str(), message.c_str());
+  if(countTimesSensor>=maxSamples){
+
+    auto distAverage = countValuesSensor/maxSamples;  
+    auto message = "{\"module\":\"water\",\"disAverage\":" + String(distAverage) + ",\"samples\":"+ String(maxSamples) +"}";
+    Serial.println("sending mqtt messag: " + String(message));
+    mqttClient.publish(MQTT_TOPIC_PUB.c_str(), message.c_str());
+
+    countTimesSensor=0; 
+    countValuesSensor=0;
+
+  }
+  else {
+    auto distCurrent = hc->dist() - String(offsetParam.getValue()).toFloat();
+    auto distCurrentAverage = countValuesSensor/countTimesSensor;
+    
+    // filtering by average distance
+    if(distCurrent < filteringFactor * distCurrentAverage){
+      countValuesSensor += countTimesSensor++;
+      countTimesSensor++;
+    }
+    
+  }
+
 }
 
 boolean reconnectMqtt()
