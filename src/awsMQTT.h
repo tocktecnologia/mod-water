@@ -172,7 +172,7 @@ void sendDistSensor()
   {
     auto distAverage = countValuesSensor / maxSamples;
     auto message = "{\"module\":\"water\",\"disAverage\":" + String(distAverage) + ",\"samples\":" + String(maxSamples) + "}";
-    Serial.println("sending mqtt messag: " + String(message));
+    Serial.println("sending to topic " + MQTT_TOPIC_PUB + " the  message: " + String(message));
     mqttClient.publish(MQTT_TOPIC_PUB.c_str(), message.c_str());
 
     countTimesSensor = 0;
