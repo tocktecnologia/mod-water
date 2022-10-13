@@ -12,12 +12,11 @@
 #include <time.h>
 #define emptyString String()
 
-//Follow instructions from https://github.com/debsahu/ESP-MQTT-AWS-IoT-Core/blob/master/doc/README.md
-//Enter values in secrets.h ▼
+// Follow instructions from https://github.com/debsahu/ESP-MQTT-AWS-IoT-Core/blob/master/doc/README.md
+// Enter values in secrets.h ▼
 #include "secrets.h"
 #include <Update.h>
 #include <HCSR04.h>
-
 
 #if !(ARDUINOJSON_VERSION_MAJOR == 6 and ARDUINOJSON_VERSION_MINOR >= 7)
 #error "Install ArduinoJson v6.7.0-beta or higher"
@@ -26,7 +25,6 @@
 String MQTT_TOPIC_UPDATE;
 String MQTT_TOPIC_SUB;
 String MQTT_TOPIC_PUB;
-
 
 #ifdef USE_SUMMER_TIME_DST
 uint8_t DST = 1;
@@ -44,7 +42,6 @@ BearSSL::PrivateKey key(privkey);
 
 PubSubClient mqttClient(client);
 
-
 time_t now;
 time_t nowish = 1510592825;
 long lastReconnectAttempt = 0;
@@ -52,48 +49,51 @@ int intervalRetryMqtt = 4000;
 int countWiFiDisconnection = 0;
 
 Ticker timerSendMqtt;
-HCSR04 *hc; 
+HCSR04 *hc;
 int triggerPin = 2;
 int echoPin = 22;
+int maxSamples = 10;
 int intervalSample = 1;
-int maxSamples=100;
-int countTimesSensor=0;
-float countValuesSensor=0.0;
+int countTimesSensor = 0;
+float countValuesSensor = 0.0;
 float filteringFactor = 2;
 
 void writeAwsFile(String awsFile)
-{   
-    // reading
-    DynamicJsonDocument jsonDoc(512);
-    Serial.println("reading config file: ");
-    File configFile = SPIFFS.open(fileConfig, "r");
-    if (configFile) {
-        size_t size = configFile.size();
-        std::unique_ptr<char[]> buf(new char[size]);
-        configFile.readBytes(buf.get(), size);
+{
+  // reading
+  DynamicJsonDocument jsonDoc(512);
+  Serial.println("reading config file: ");
+  File configFile = SPIFFS.open(fileConfig, "r");
+  if (configFile)
+  {
+    size_t size = configFile.size();
+    std::unique_ptr<char[]> buf(new char[size]);
+    configFile.readBytes(buf.get(), size);
 
-        auto deserializeError = deserializeJson(jsonDoc, buf.get());
-        if ( ! deserializeError ) {
-            jsonDoc["aws_file_mqtt"]= awsFile;
-            serializeJson(jsonDoc, Serial);
-        }
-        configFile.close();  
-    } 
-
-    // writing  
-    configFile = SPIFFS.open(fileConfig, "w");
-    if (!configFile) {
-        Serial.println("failed to open config file for writing");
+    auto deserializeError = deserializeJson(jsonDoc, buf.get());
+    if (!deserializeError)
+    {
+      jsonDoc["aws_file_mqtt"] = awsFile;
+      serializeJson(jsonDoc, Serial);
     }
-    Serial.println("writing config file: ");
-    serializeJson(jsonDoc, Serial);
-    serializeJson(jsonDoc, configFile);
-    configFile.close();  
-    jsonDoc.clear();    
+    configFile.close();
+  }
 
+  // writing
+  configFile = SPIFFS.open(fileConfig, "w");
+  if (!configFile)
+  {
+    Serial.println("failed to open config file for writing");
+  }
+  Serial.println("writing config file: ");
+  serializeJson(jsonDoc, Serial);
+  serializeJson(jsonDoc, configFile);
+  configFile.close();
+  jsonDoc.clear();
 }
 
-void NTPConnect(void){
+void NTPConnect(void)
+{
   Serial.print("Setting time using SNTP");
   configTime(TIME_ZONE * 3600, DST * 3600, "pool.ntp.org", "time.nist.gov");
   now = time(nullptr);
@@ -117,19 +117,27 @@ void messageReceived(char *topic, byte *payload, unsigned int length)
   Serial.print("]: ");
   String message;
   for (int i = 0; i < length; i++)
-  { 
+  {
     message += String((char)payload[i]);
     Serial.print((char)payload[i]);
   }
   Serial.println();
 
-  if (String(topic).equals(MQTT_TOPIC_UPDATE) == 1) {
-    Serial.println("write name of file on memory: "+ message);
-    writeAwsFile(message);
-    delay(3000);
-    ESP.restart();
-  }    
+  if (String(topic).equals(MQTT_TOPIC_UPDATE) == 1)
+  {
+    // Serial.println("write name of file on memory: " + message);
+    // writeAwsFile(message);
+    // delay(3000);
+    // ESP.restart();
 
+    timerSendMqtt.detach();
+    flipper.attach(0.1, flip); // pisca rapido enquanto tenta se conectar ao wifi
+    Serial.println("OTA starting ...");
+    if (execOTA(message))
+    {
+      ESP.restart();
+    }
+  }
 }
 
 void pubSubErr(int8_t MQTTErr)
@@ -156,68 +164,68 @@ void pubSubErr(int8_t MQTTErr)
     Serial.print("Connect unauthorized");
 }
 
-void sendDistSensor(){
-  if(countTimesSensor>=maxSamples){
+void sendDistSensor()
+{
+  float sensorValue = hc->dist();
 
-    auto distAverage = countValuesSensor/maxSamples;  
-    auto message = "{\"module\":\"water\",\"disAverage\":" + String(distAverage) + ",\"samples\":"+ String(maxSamples) +"}";
+  if (countTimesSensor > maxSamples)
+  {
+    auto distAverage = countValuesSensor / maxSamples;
+    auto message = "{\"module\":\"water\",\"disAverage\":" + String(distAverage) + ",\"samples\":" + String(maxSamples) + "}";
     Serial.println("sending mqtt messag: " + String(message));
     mqttClient.publish(MQTT_TOPIC_PUB.c_str(), message.c_str());
 
-    countTimesSensor=0; 
-    countValuesSensor=0;
-
+    countTimesSensor = 0;
+    countValuesSensor = 0;
   }
-  else {
-    auto distCurrent = hc->dist() - String(offsetParam.getValue()).toFloat();
-    auto distCurrentAverage = countValuesSensor/(countTimesSensor==0?1:countTimesSensor);
-    
-    // filtering by average distance
-    if(distCurrent < filteringFactor * distCurrentAverage){
-      countValuesSensor += countTimesSensor++;
-      countTimesSensor++;
-    }
-    
-  }
+  else
+  {
 
+    auto valueCurrent = sensorValue - String(offsetParam.getValue()).toFloat();
+    countValuesSensor += valueCurrent < 0 ? 0 : valueCurrent;
+    countTimesSensor++;
+  }
 }
 
 boolean reconnectMqtt()
 {
-    if (WiFi.status() != WL_CONNECTED)
-    {
-      countWiFiDisconnection++;
-      if (countWiFiDisconnection >= 3)
-        ESP.restart();
-    }
-  
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    countWiFiDisconnection++;
+    if (countWiFiDisconnection >= 3)
+      ESP.restart();
+  }
 
-    String thingName = esp8266ID();
-    String clientId = "TOCK-" + thingName + "-";
-    clientId += String(random(0xffff), HEX);
+  String thingName = esp8266ID();
+  String clientId = "TOCK-" + thingName + "-";
+  clientId += String(random(0xffff), HEX);
 
-    Serial.print("Try connecting to ");
-    Serial.print(AWS_MQTT_ENDPOINT);
-    Serial.println(" ...");
-    flipper.attach(0.3, flip);
+  Serial.print("Try connecting to ");
+  Serial.print(AWS_MQTT_ENDPOINT);
+  Serial.println(" ...");
+  flipper.attach(0.3, flip);
 
+  if (mqttClient.connect(clientId.c_str()))
+  {
+    Serial.println("connected to mqtt. Broker: " + String(AWS_MQTT_ENDPOINT) + "!");
+    mqttClient.publish(MQTT_TOPIC_PUB.c_str(), "{\"msg\":\"connected\"}");
 
-    if (mqttClient.connect(clientId.c_str()))
-    {
-        Serial.println("connected to mqtt. Broker: " + String(AWS_MQTT_ENDPOINT) + "!");
-        mqttClient.publish(MQTT_TOPIC_PUB.c_str(), "{\"msg\":\"connected\"}");
-        mqttClient.subscribe(MQTT_TOPIC_UPDATE.c_str());
-        mqttClient.subscribe(MQTT_TOPIC_SUB.c_str());      
-   
-        flipper.attach(1, flip);     
-    }
+    mqttClient.subscribe(MQTT_TOPIC_UPDATE.c_str());
+    Serial.println("Subscribed at " + MQTT_TOPIC_UPDATE);
 
-    return mqttClient.connected();
+    mqttClient.subscribe(MQTT_TOPIC_SUB.c_str());
+    Serial.println("Subscribed at " + MQTT_TOPIC_SUB);
+
+    flipper.attach(1, flip);
+  }
+
+  return mqttClient.connected();
 }
 
-void setupMQTT(){
+void setupMQTT()
+{
 
-NTPConnect();
+  NTPConnect();
 
 #ifdef ESP32
   client.setCACert(AWS_CERT_CA);
@@ -233,40 +241,32 @@ NTPConnect();
   lastReconnectAttempt = 0;
 
   // subscribers
-  MQTT_TOPIC_UPDATE =  "tock/" + esp8266ID() + "/update";
+  MQTT_TOPIC_UPDATE = "tock/" + esp8266ID() + "/update";
   MQTT_TOPIC_SUB = "tock/" + esp8266ID() + "/sub";
   MQTT_TOPIC_PUB = "tock/" + esp8266ID() + "/pub";
 
-
-  
-  hc = new HCSR04(triggerPin,echoPin);
-  timerSendMqtt.attach(intervalSample,sendDistSensor);
-  
-
+  hc = new HCSR04(triggerPin, echoPin);
+  timerSendMqtt.attach(intervalSample, sendDistSensor);
 }
 
 void loopMQTT()
 {
- 
- if (!mqttClient.connected())
+
+  if (!mqttClient.connected())
+  {
+    long now = millis();
+    if (now - lastReconnectAttempt > intervalRetryMqtt)
     {
-        long now = millis();
-        if (now - lastReconnectAttempt > intervalRetryMqtt)
-        {
-            lastReconnectAttempt = now;
-            // Attempt to reconnect
-            if (reconnectMqtt())
-            {
-                lastReconnectAttempt = 0;
-            }
-        }
+      lastReconnectAttempt = now;
+      // Attempt to reconnect
+      if (reconnectMqtt())
+      {
+        lastReconnectAttempt = 0;
+      }
     }
-    else
-    { 
-        mqttClient.loop();
-    }
-
-
-
+  }
+  else
+  {
+    mqttClient.loop();
+  }
 }
-
