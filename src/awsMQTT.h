@@ -135,6 +135,8 @@ void messageReceived(char *topic, byte *payload, unsigned int length)
     Serial.println("OTA starting ...");
     if (execOTA(message))
     {
+      Serial.println("Formating and rebooting ...");
+      SPIFFS.format();
       ESP.restart();
     }
   }
